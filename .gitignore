@@ -3,6 +3,15 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+# EPİAŞ Wiki
+.env
+raw/
+logs/
+compile_state.json
+scan-log.json
+__pycache__/
+*.pyc
+
 # C extensions
 *.so
 
