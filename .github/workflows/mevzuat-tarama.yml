@@ -1,0 +1,86 @@
+name: Haftalık Mevzuat Tarama
+
+on:
+  schedule:
+    - cron: '0 7 * * 1'   # Her Pazartesi 07:00 UTC (Türkiye saati 10:00)
+  workflow_dispatch:        # Manuel tetikleme (Actions sekmesinden "Run workflow")
+
+jobs:
+  mevzuat-tarama:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Repo'yu çek
+        uses: actions/checkout@v4
+
+      - name: Python kur
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Bağımlılıkları kur
+        run: pip install requests beautifulsoup4 lxml
+
+      - name: Taramayı çalıştır
+        id: scraper
+        run: |
+          python scraper_check.py > tarama_sonuc.txt 2>&1
+          cat tarama_sonuc.txt
+
+      - name: Sonucu parse et
+        id: sonuc
+        run: |
+          if grep -q "YENI_BELGE:" tarama_sonuc.txt; then
+            YENI=$(grep "YENI_BELGE:" tarama_sonuc.txt | cut -d':' -f2 | tr -d ' ')
+            echo "yeni_var=true" >> $GITHUB_OUTPUT
+            echo "yeni_sayisi=$YENI" >> $GITHUB_OUTPUT
+          else
+            echo "yeni_var=false" >> $GITHUB_OUTPUT
+            echo "yeni_sayisi=0" >> $GITHUB_OUTPUT
+          fi
+          # Detay satırlarını al
+          DETAY=$(grep "^-" tarama_sonuc.txt | head -20 || echo "Detay yok")
+          echo "detay<<DETAYEOF" >> $GITHUB_OUTPUT
+          echo "$DETAY" >> $GITHUB_OUTPUT
+          echo "DETAYEOF" >> $GITHUB_OUTPUT
+
+      - name: Issue aç (yeni mevzuat varsa)
+        if: steps.sonuc.outputs.yeni_var == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const bugun = new Date().toLocaleDateString('tr-TR');
+            const sayi  = '${{ steps.sonuc.outputs.yeni_sayisi }}';
+            const detay = `${{ steps.sonuc.outputs.detay }}`;
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              title: `📋 ${sayi} yeni mevzuat tespit edildi — ${bugun}`,
+              body: [
+                '## EPİAŞ Mevzuat Radar — Haftalık Tarama',
+                '',
+                `**Tarih:** ${bugun}`,
+                `**Yeni belge sayısı:** ${sayi}`,
+                '',
+                '### Tespit Edilen Belgeler',
+                '',
+                detay,
+                '',
+                '---',
+                '### Yapılması Gerekenler',
+                '',
+                'Lokalde sırayla çalıştır:',
+                '```bash',
+                'python ingest.py',
+                'python compile.py',
+                '```',
+                '',
+                'Wiki güncellendikten sonra bu issue\'yu kapat.',
+              ].join('\n'),
+              labels: ['mevzuat-guncelleme']
+            });
+
+      - name: Özet (değişiklik yoksa)
+        if: steps.sonuc.outputs.yeni_var == 'false'
+        run: echo "Yeni mevzuat tespit edilmedi. Wiki güncel."
