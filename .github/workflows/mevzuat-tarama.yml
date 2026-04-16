@@ -2,8 +2,11 @@ name: Haftalık Mevzuat Tarama
 
 on:
   schedule:
-    - cron: '0 7 * * 1'   # Her Pazartesi 07:00 UTC (Türkiye saati 10:00)
-  workflow_dispatch:        # Manuel tetikleme (Actions sekmesinden "Run workflow")
+    - cron: '0 7 * * 1'
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   mevzuat-tarama:
@@ -38,7 +41,6 @@ jobs:
             echo "yeni_var=false" >> $GITHUB_OUTPUT
             echo "yeni_sayisi=0" >> $GITHUB_OUTPUT
           fi
-          # Detay satırlarını al
           DETAY=$(grep "^-" tarama_sonuc.txt | head -20 || echo "Detay yok")
           echo "detay<<DETAYEOF" >> $GITHUB_OUTPUT
           echo "$DETAY" >> $GITHUB_OUTPUT
